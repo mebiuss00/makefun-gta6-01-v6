@@ -1,11 +1,11 @@
-// main.js — Palmera Heat: Vice Run. Owns the game state and the frame: input becomes a
+// main.js — Palmera Heat: Full Service. Owns the game state and the frame: input becomes a
 // player (on foot or behind a wheel), the wanted system and the missions advance, the
 // camera follows, and render.js + hud.js draw the result. The title, pause, help, busted
 // and wasted screens are modes of this one loop, not separate pages.
 
 import {
   WALK_SPEED, SPRINT_SPEED, PLAYER_RADIUS, REGEN_DELAY, REGEN_RATE, DAY_LENGTH, DAY_START,
-  WORLD_W, WORLD_H, BUST_FINE_BASE, BUST_FINE_PER_STAR, WASTED_FEE,
+  WORLD_W, WORLD_H, BUST_FINE_BASE, BUST_FINE_PER_STAR, WASTED_FEE, GARAGE_LAY_LOW_PRICE,
 } from './config.js';
 import { buildCity, landmarkById, collideWorld } from './city.js';
 import { makeRng, clamp, dist } from './random.js';
@@ -49,6 +49,9 @@ const g = {
   bustProgress: 0,
   lastCrimeAt: -99,
   lastCrimePos: { x: 0, y: 0 },
+  investigateAt: -99,
+  investigatePos: null,
+  weaponPickup: null,
   money: 40,
   totalEarned: 0,
   errandsDone: 0,
@@ -129,6 +132,49 @@ function respawnAfterSplash() {
   g.dirtySave = true;
 }
 
+// --- the garage's second business, and a crate by the docks ---------------------------------
+
+// Rico's other business: lay $150 on the counter and the garage swears, on the record,
+// that you were never out tonight. The heat forgets your face; the PPD stands down.
+function updateGarageService() {
+  const garage = landmarkById(g.city, 'garage');
+  const p = g.player;
+  if (!garage || dist(p.x, p.y, garage.point.x, garage.point.y) > 52) return;
+  if (g.heat <= 0) {
+    g.promptText = "Rico's Garage — quiet tonight. Good.";
+    return;
+  }
+  if (g.money >= GARAGE_LAY_LOW_PRICE) {
+    g.promptText = "G — Lay low at Rico's Garage ($" + GARAGE_LAY_LOW_PRICE + ') and let the heat forget you';
+    if (g.input.wasPressed('KeyG')) {
+      g.money -= GARAGE_LAY_LOW_PRICE;
+      g.heat = 0;
+      g.sound.cash();
+      g.showBanner('Laid low', "Rico's crew swears you were in the garage all night.", 3.2);
+      g.dirtySave = true;
+    }
+  } else {
+    g.promptText = "Laying low at Rico's costs $" + GARAGE_LAY_LOW_PRICE + ' — you are short';
+  }
+}
+
+// A crate by the docks glints: walk over it and the Marina SMG changes owners.
+function updateWeaponPickup() {
+  const wp = g.weaponPickup;
+  const p = g.player;
+  if (!wp || wp.taken || p.car) return;
+  const d = dist(p.x, p.y, wp.x, wp.y);
+  if (d < 26) {
+    wp.taken = true;
+    if (!p.weapons.includes('smg')) p.weapons.push('smg');
+    p.weapon = 'smg';
+    g.sound.pickup();
+    g.showBanner('Marina SMG', 'Faster, louder, messier. Q switches weapons.', 3.6);
+  } else if (d < 64) {
+    g.promptText = 'Something glints in a dockside crate…';
+  }
+}
+
 // --- getting into and out of cars ------------------------------------------------------------
 
 function enterNearestCar() {
@@ -192,6 +238,14 @@ function updatePlayer(dt) {
   if (input.wasPressed('KeyE')) {
     if (p.car) exitCar();
     else enterNearestCar();
+  }
+
+  // Q swaps between the weapons the player owns.
+  if (input.wasPressed('KeyQ') && p.weapons.length > 1) {
+    const i = p.weapons.indexOf(p.weapon);
+    p.weapon = p.weapons[(i + 1) % p.weapons.length];
+    p.shootCd = Math.max(p.shootCd, 0.12);
+    g.sound.pickup();
   }
 
   if (p.car) {
@@ -351,6 +405,8 @@ function update(dt) {
     updatePolice(g, dt);
     updateBullets(g, dt);
     updateMissions(g, dt);
+    updateGarageService();
+    updateWeaponPickup();
   }
   updateParticles(dt);
 
@@ -400,6 +456,8 @@ function freshPlayer() {
     hp: 100,
     car: null,
     speedMag: 0,
+    weapons: ['pistol'], // what the player owns; the SMG joins when its crate is found
+    weapon: 'pistol', // what is in hand right now (an id from the WEAPONS table)
     shootCd: 0,
     meleeCd: 0,
     swingT: 0,
@@ -440,6 +498,9 @@ function startPlay(useSave) {
   if (save && save.muted) g.sound.setMuted(true);
   spawnParkedCars(g);
   spawnPeds(g);
+  // The SMG waits in a crate by the docks for anyone who goes looking.
+  const docks = landmarkById(g.city, 'docks');
+  g.weaponPickup = { x: docks.point.x + 64, y: docks.point.y + 26, taken: false };
   // Snap the camera onto the player so play opens framed.
   g.camera.x = clamp(g.player.x - VIEW_W / 2, 0, WORLD_W - VIEW_W);
   g.camera.y = clamp(g.player.y - VIEW_H / 2, 0, WORLD_H - VIEW_H);

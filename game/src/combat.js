@@ -2,21 +2,22 @@
 // the mouse; officers shoot back once the wanted level turns serious. Every violent act
 // reports itself to the wanted system, because in Palmera somebody always sees.
 
-import { CRIME_HEAT } from './config.js';
+import { CRIME_HEAT, WEAPONS } from './config.js';
 import { collideWorld, lineBlocked } from './city.js';
 import { dist } from './random.js';
 import { scarePeds } from './people.js';
 
-export function makeBullet(x, y, angle, from) {
-  const speed = 780;
+export function makeBullet(x, y, angle, from, speed = 780, life = 0.55) {
   return {
     x,
     y,
     vx: Math.cos(angle) * speed,
     vy: Math.sin(angle) * speed,
-    life: 0.55,
+    life,
     from, // 'player' | 'police'
     dead: false,
+    dmgPed: 34, // a police bullet and a pistol bullet agree on these; playerShoot overrides per weapon
+    dmgCar: 16,
   };
 }
 
@@ -40,8 +41,19 @@ export function hurtPlayer(g, amount, fromX, fromY) {
 }
 
 export function hurtPed(g, ped, amount, cause) {
-  if (ped.state === 'dead') return;
+  if (ped.state === 'dead' || ped.state === 'roughed') return;
   ped.hp -= amount;
+  // A mission debtor beaten down to 40 hp or less is done — roughed up, not killed.
+  // The job said remind them, and a man cowering on the dock has been reminded.
+  if (cause === 'player' && ped.isTarget && ped.hp <= 40) {
+    ped.hp = Math.max(ped.hp, 1);
+    ped.state = 'roughed';
+    ped.stateT = 0;
+    ped.speed = 0;
+    reportCrime(g, 'assault', ped.x, ped.y);
+    scarePeds(g, ped.x, ped.y, 240);
+    return;
+  }
   if (ped.hp <= 0) {
     ped.state = 'dead';
     ped.deadT = 0;
@@ -99,19 +111,24 @@ export function playerMelee(g) {
   if (hitSomething) scarePeds(g, p.x, p.y, 130);
 }
 
-// The player's shot: one bullet toward the mouse, a little spread, a lot of noise.
+// The player's shot: one bullet toward the mouse, from whichever weapon is in hand —
+// its table entry sets the damage, the pace, the spread and the noise it makes.
 export function playerShoot(g, aimAngle) {
   const p = g.player;
   if (p.shootCd > 0 || p.car) return;
-  p.shootCd = 0.16;
+  const w = WEAPONS.find((x) => x.id === p.weapon) ?? WEAPONS[0];
+  p.shootCd = w.cooldown;
   p.muzzleT = 0.05;
-  const spread = (g.rng() - 0.5) * 0.045;
-  g.bullets.push(makeBullet(p.x + Math.cos(aimAngle) * 16, p.y + Math.sin(aimAngle) * 16, aimAngle + spread, 'player'));
+  const spread = (g.rng() - 0.5) * w.spread;
+  const bullet = makeBullet(p.x + Math.cos(aimAngle) * 16, p.y + Math.sin(aimAngle) * 16, aimAngle + spread, 'player', w.bulletSpeed, w.bulletLife);
+  bullet.dmgPed = w.pedDamage;
+  bullet.dmgCar = w.carDamage;
+  g.bullets.push(bullet);
   g.sound.shot();
   g.noiseAt = { x: p.x, y: p.y, t: g.time };
   scarePeds(g, p.x, p.y, 250);
   // Firing at all is a crime somebody reports; firing near officers is worse.
-  g.heat += 3;
+  g.heat += w.heatPerShot;
   g.lastCrimeAt = g.time;
   g.lastCrimePos = { x: p.x, y: p.y };
 }
@@ -149,7 +166,7 @@ export function updateBullets(g, dt) {
       for (const ped of [...g.peds, ...g.cops]) {
         if (ped.state === 'dead') continue;
         if (dist(b.x, b.y, ped.x, ped.y) < 11) {
-          hurtPed(g, ped, 34, 'player');
+          hurtPed(g, ped, b.dmgPed, 'player');
           struck = true;
           break;
         }
@@ -158,7 +175,7 @@ export function updateBullets(g, dt) {
         for (const car of g.cars) {
           if (car === g.player.car) continue;
           if (dist(b.x, b.y, car.x, car.y) < car.type.length * 0.42) {
-            hurtCar(g, car, 16, 'player');
+            hurtCar(g, car, b.dmgCar, 'player');
             struck = true;
             break;
           }

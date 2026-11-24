@@ -2,7 +2,7 @@
 // wanted stars, the minimap, the current objective, prompts and banners, and the menu
 // screens (title, pause, help, busted, wasted) that pause the streets.
 
-import { WORLD_W, WORLD_H, LAND_H, SHORE_Y } from './config.js';
+import { WORLD_W, WORLD_H, LAND_H, SHORE_Y, WEAPONS } from './config.js';
 import { avenueCenterX, streetCenterY } from './city.js';
 import { clamp } from './random.js';
 
@@ -111,6 +111,17 @@ export function drawHud(ctx, g, objective) {
   ctx.fillRect(26, 54, 172, 9);
   ctx.fillStyle = p.hp > 30 ? '#e2483d' : (Math.floor(g.time * 6) % 2 ? '#e2483d' : '#ff8a7a');
   ctx.fillRect(26, 54, 172 * clamp(p.hp / 100, 0, 1), 9);
+
+  // What is in the player's hand, when they are on foot to use it.
+  if (!p.car && p.weapon) {
+    const w = WEAPONS.find((x) => x.id === p.weapon);
+    if (w) {
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.font = '600 13px system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(w.name + (p.weapons && p.weapons.length > 1 ? '  ·  Q to switch' : ''), 26, 94);
+    }
+  }
 
   drawMinimap(ctx, g, objective);
 
@@ -240,7 +251,7 @@ export function drawTitleScreen(ctx, g, hasSave) {
   ctx.fillText('HEAT', W / 2, H * 0.30 + 82);
   ctx.fillStyle = '#3de2d0';
   ctx.font = '700 25px system-ui, sans-serif';
-  ctx.fillText('— VICE RUN —', W / 2, H * 0.30 + 122);
+  ctx.fillText('— FULL SERVICE —', W / 2, H * 0.30 + 122);
   ctx.fillStyle = '#e8e8e8';
   ctx.font = '16px system-ui, sans-serif';
   ctx.fillText('An open-world crime story in a sun-soaked coastal city.', W / 2, H * 0.30 + 158);
@@ -268,7 +279,7 @@ export function drawPauseScreen(ctx, g) {
   ctx.fillText('PAUSED', W / 2, H * 0.4);
   ctx.font = '16px system-ui, sans-serif';
   ctx.fillStyle = '#d8d8d8';
-  ctx.fillText('Cash $' + g.money.toLocaleString('en-US') + '   ·   Jobs done: ' + g.storyIndex + '/5   ·   Errands: ' + g.errandsDone, W / 2, H * 0.4 + 40);
+  ctx.fillText('Cash $' + g.money.toLocaleString('en-US') + '   ·   Jobs done: ' + g.storyIndex + '/' + g.storyDefs.length + '   ·   Errands: ' + g.errandsDone, W / 2, H * 0.4 + 40);
   ctx.fillText('P or Esc to keep playing · M to ' + (g.sound.muted ? 'unmute' : 'mute'), W / 2, H * 0.4 + 68);
 }
 
@@ -287,11 +298,13 @@ export function drawHelpScreen(ctx, g) {
   const lines = [
     'WASD / arrows — walk, or drive when you are in a car',
     'E — get into the nearest car (parked, or pull a driver out)',
-    'Mouse — aim · Left click — shoot · F — melee',
+    'Mouse — aim · Left click — shoot · F — melee · Q — switch weapon',
     'Shift — sprint on foot · Space — handbrake in a car',
     'Follow the gold marker: story jobs pay the rent, teal errands pay the rest',
     'Crimes raise your wanted stars. More stars, more police, and they shoot at 3+',
     'Break their sight line and let the heat cool — or get caught slow and pay the fine',
+    "Hot and flush? G at Rico's Garage: $150 and the heat forgets your face",
+    'A second gun sleeps in a crate by the docks, for anyone who goes looking',
     'P — pause · H — this help · M — mute · Your money and progress save themselves',
   ];
   lines.forEach((line, i) => ctx.fillText(line, W / 2 - 330, H * 0.2 + 52 + i * 30));

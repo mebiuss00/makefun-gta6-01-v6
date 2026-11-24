@@ -92,8 +92,18 @@ export function updateWanted(g, dt) {
   }
   g.watched = seen;
   const decay = seen ? HEAT_DECAY_SEEN : HEAT_DECAY_HIDDEN;
+  const prevStars = g.stars;
   g.heat = Math.max(0, g.heat - decay * dt);
   g.stars = starsForHeat(g.heat);
+  // A star that slips away unseen is not forgotten: the PPD sends a cruiser to look
+  // at the last place a crime was reported, because somebody always sees something.
+  if (
+    g.stars < prevStars && g.stars > 0 && !seen && g.lastCrimePos &&
+    g.time - g.lastCrimeAt < 90 && g.time - (g.investigateAt ?? -99) > 12
+  ) {
+    g.investigateAt = g.time;
+    g.investigatePos = { x: g.lastCrimePos.x, y: g.lastCrimePos.y };
+  }
 }
 
 // How fast the thing the player rides (or their own legs) is moving.
@@ -147,15 +157,38 @@ export function updatePolice(g, dt) {
     g.bustProgress = 0;
   }
 
+  // A pending crime scene gets one cruiser: the farthest from the player rolls off
+  // the chase and goes to look at where the crime was reported.
+  if (g.investigatePos) {
+    let chosen = null;
+    let chosenD = -1;
+    for (const car of g.cars) {
+      if (car.driver !== 'police' || car.investigate) continue;
+      const d = dist(car.x, car.y, p.x, p.y);
+      if (d > chosenD) {
+        chosenD = d;
+        chosen = car;
+      }
+    }
+    if (chosen) {
+      chosen.investigate = g.investigatePos;
+      g.investigatePos = null;
+    }
+  }
+
   // --- drive the cruisers --------------------------------------------------------------
   for (const car of g.cars) {
     if (car.driver !== 'police') continue;
     if (dist(car.x, car.y, p.x, p.y) > 1200) {
       car.driver = 'traffic';
+      car.investigate = null;
       giveTrafficBrain(car, g.rng);
       continue;
     }
-    const target = p.car ?? p;
+    if (car.investigate && dist(car.x, car.y, car.investigate.x, car.investigate.y) < 70) {
+      car.investigate = null; // scene looked over; back to the chase
+    }
+    const target = car.investigate ?? p.car ?? p;
     // Aim a little ahead of a moving target.
     const lead = clamp(dist(car.x, car.y, target.x, target.y) / 300, 0, 0.7);
     let tx = target.x + Math.cos(target.angle ?? 0) * (target.speed ?? 0) * lead;
@@ -192,7 +225,7 @@ export function updatePolice(g, dt) {
     let targetSpeed = 0;
     let want = cop.angle;
 
-    if (stars >= POLICE_SHOOT_STARS && seen && d < 300 && d > 120 && !p.car) {
+    if (stars >= POLICE_SHOOT_STARS && seen && d < 300 && d > 120) {
       // Hold a firing line: close enough to hit, far enough to stay standing.
       cop.state = 'shoot';
       want = Math.atan2(p.y - cop.y, p.x - cop.x);

@@ -150,7 +150,8 @@ export function trafficControl(g, car, dt) {
         (ai.axis === 'v' && ((ai.dir > 0 && st === BLOCKS_Y) || (ai.dir < 0 && st === 0))) ||
         (ai.axis === 'h' && ((ai.dir > 0 && av === BLOCKS_X) || (ai.dir < 0 && av === 0)));
       const roll = g.rng();
-      if (atEdge || roll < 0.34) {
+      if (atEdge || ai.forceTurn || roll < 0.34) {
+        ai.forceTurn = false;
         // Turn: swap axis, take the crossing road, direction by left or right.
         const left = atEdge ? g.rng() < 0.5 : roll < 0.17;
         if (ai.axis === 'v') {
@@ -204,11 +205,12 @@ export function trafficControl(g, car, dt) {
       }
     }
   }
-  // Do not crawl forever behind a wreck or a parked car in the lane: patience wears out.
+  // Do not crawl forever behind a wreck or a parked car in the lane: patience wears
+  // out, and a driver who has waited long enough reroutes at the next intersection.
   if (control.throttle === 0 && Math.abs(car.speed) < 4) {
     car.honkAt += dt;
     if (car.honkAt > 6) {
-      ai.dir = ai.dir; // keep waiting; a jam in Palmera is part of the scenery
+      ai.forceTurn = true;
       car.honkAt = 0;
     }
   } else {
@@ -224,6 +226,22 @@ export function maintainTraffic(g, dt) {
     const car = g.cars[i];
     if (car.driver !== 'traffic') continue;
     if (dist(car.x, car.y, p.x, p.y) > TRAFFIC_DESPAWN_DIST) {
+      g.cars.splice(i, 1);
+    }
+  }
+  // Wrecks are towed away after 45 seconds; Palmera keeps its streets clean. The
+  // marked mission car is exempt (missions.js answers for it) and so is the wreck
+  // the player is still sitting in.
+  for (let i = g.cars.length - 1; i >= 0; i--) {
+    const car = g.cars[i];
+    if (!car.wrecked || car.missionCar || car.driver === 'player') continue;
+    car.wreckAge = (car.wreckAge ?? 0) + dt;
+    if (car.wreckAge > 45) {
+      if (car.spot) {
+        car.spot.car = null;
+        car.spot.respawnAt = g.time + 45;
+        car.spot = null;
+      }
       g.cars.splice(i, 1);
     }
   }

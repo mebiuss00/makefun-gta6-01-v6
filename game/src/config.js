@@ -51,6 +51,14 @@ export const BUST_FILL_TIME = 2.1; // seconds of contact to complete a bust
 export const BUST_FINE_BASE = 100;
 export const BUST_FINE_PER_STAR = 60;
 export const WASTED_FEE = 150; // hospital bill when the player is wasted
+export const GARAGE_LAY_LOW_PRICE = 150; // Rico's Garage makes the heat forget you, for a price
+
+// The armoury: one honest pistol and one loud problem. combat.js reads this table; the
+// player starts with the pistol and finds the SMG waiting in a dockside crate.
+export const WEAPONS = [
+  { id: 'pistol', name: 'Harbor Pistol', pedDamage: 34, carDamage: 16, cooldown: 0.16, bulletSpeed: 780, bulletLife: 0.55, spread: 0.045, heatPerShot: 3 },
+  { id: 'smg', name: 'Marina SMG', pedDamage: 19, carDamage: 9, cooldown: 0.075, bulletSpeed: 760, bulletLife: 0.45, spread: 0.09, heatPerShot: 3 },
+];
 
 // Traffic and crowds.
 export const TRAFFIC_TARGET = 13; // civilian cars kept rolling near the player

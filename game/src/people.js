@@ -18,7 +18,7 @@ export function makePed(rng, x, y) {
     angle: rng() * Math.PI * 2,
     speed: 0,
     hp: 100,
-    state: 'walk', // walk | flee | cower | dead
+    state: 'walk', // walk | flee | cower | roughed | dead ('roughed' = a debtor beaten down, stays down)
     stateT: 0,
     block: null, // {bx, by, corner} while strolling a block's sidewalk loop
     fleeFrom: null,
@@ -100,7 +100,7 @@ export function maintainPeds(g) {
 // Something loud and frightening happened at (x, y): everyone in earshot reacts.
 export function scarePeds(g, x, y, radius) {
   for (const ped of g.peds) {
-    if (ped.state === 'dead') continue;
+    if (ped.state === 'dead' || ped.state === 'roughed') continue;
     if (dist(ped.x, ped.y, x, y) > radius) continue;
     if (g.rng() < 0.22) {
       ped.state = 'cower';
@@ -122,7 +122,10 @@ export function updatePed(g, ped, dt) {
   let targetSpeed = 0;
   let wantAngle = ped.angle;
 
-  if (ped.state === 'flee' && ped.fleeFrom) {
+  if (ped.state === 'roughed') {
+    // Beaten down and staying down: the account is settled, the man is not walking it off.
+    targetSpeed = 0;
+  } else if (ped.state === 'flee' && ped.fleeFrom) {
     wantAngle = Math.atan2(ped.y - ped.fleeFrom.y, ped.x - ped.fleeFrom.x);
     targetSpeed = 238;
     if (ped.stateT <= 0) ped.state = 'walk';

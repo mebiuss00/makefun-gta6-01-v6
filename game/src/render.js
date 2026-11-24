@@ -361,8 +361,9 @@ function drawPerson(ctx, ped, isPlayer, time) {
     ctx.fill();
   }
   ctx.restore();
-  // Mission debtors wear a red marker so the player can find the argument.
-  if (ped.isTarget && ped.state !== 'dead') {
+  // Mission debtors wear a red marker so the player can find the argument — until
+  // the argument is settled and they are down for good.
+  if (ped.isTarget && ped.state !== 'dead' && ped.state !== 'roughed') {
     const bounce = Math.sin(time * 5) * 3;
     ctx.fillStyle = '#ff3b30';
     ctx.beginPath();
@@ -423,6 +424,24 @@ export function drawWorld(ctx, g, cam, objective) {
   drawRoads(ctx, g, cam);
   drawBuildings(ctx, g, cam, darkness);
   drawProps(ctx, g, cam);
+  // The dockside crate holding the SMG, while it still holds it: a dark case with a
+  // teal glint that breathes so a passer-by notices it.
+  if (g.weaponPickup && !g.weaponPickup.taken) {
+    const wp = g.weaponPickup;
+    if (wp.x > cam.x - 40 && wp.y > cam.y - 40 && wp.x < cam.x + cam.w + 40 && wp.y < cam.y + cam.h + 40) {
+      const pulse = 0.55 + Math.sin(g.time * 4) * 0.25;
+      ctx.fillStyle = 'rgba(20,20,30,0.3)';
+      ctx.fillRect(wp.x - 13, wp.y - 7, 28, 20);
+      ctx.fillStyle = '#3a3f46';
+      ctx.fillRect(wp.x - 15, wp.y - 11, 28, 20);
+      ctx.strokeStyle = 'rgba(61,226,208,' + pulse.toFixed(3) + ')';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(wp.x - 15, wp.y - 11, 28, 20);
+      ctx.fillStyle = '#3de2d0';
+      ctx.fillRect(wp.x - 9, wp.y - 3, 16, 4);
+      ctx.fillRect(wp.x + 5, wp.y - 6, 4, 7);
+    }
+  }
   if (objective) drawObjectiveMarker(ctx, g, objective);
 
   for (const car of g.cars) {

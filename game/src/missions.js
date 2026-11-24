@@ -1,4 +1,4 @@
-// missions.js — the work that pays. A five-job story chain runs Rico's errands into
+// missions.js — the work that pays. An eight-job story chain runs Rico's errands into
 // something bigger, each job a short list of steps (go, steal, pick up, rough up, deliver)
 // watched by the engine below; between story jobs the city itself offers repeatable paid
 // errands — a pickup at one landmark, a timed drop at another.
@@ -39,6 +39,17 @@ export function storyMissions(city) {
       ],
     },
     {
+      id: 'market-money',
+      title: 'Market Money',
+      giver: 'Lucia',
+      intro: "Bayview Market's stalls pay for protection in cash. Collect it, and leave it where the faithful will find it.",
+      payout: 550,
+      steps: [
+        { kind: 'pickup', at: L('market'), label: 'Collect the cashbox at Bayview Market', heatOnDone: 'missionPickup' },
+        { kind: 'deliver', at: L('chapel'), label: 'Leave it at St. Lucia Chapel' },
+      ],
+    },
+    {
       id: 'dockside-debts',
       title: 'Dockside Debts',
       giver: 'Rico',
@@ -48,6 +59,18 @@ export function storyMissions(city) {
         { kind: 'goto', at: L('docks'), label: 'Head to the Harbor Freight Docks' },
         { kind: 'rough', at: L('docks'), label: 'Rough up the debtors (0/3)', count: 3 },
         { kind: 'deliver', at: L('garage'), label: "Report back to Rico's Garage" },
+      ],
+    },
+    {
+      id: 'chapel-bells',
+      title: 'Chapel Bells',
+      giver: 'Rico',
+      intro: "A wedding at St. Lucia needs a coupe with ribbons, and Mercy General's car park has one nobody will miss.",
+      payout: 750,
+      steps: [
+        { kind: 'goto', at: L('hospital'), label: "Meet Rico's cousin at Mercy General Hospital" },
+        { kind: 'steal', at: L('hospital'), label: 'Take the marked coupe from the hospital car park', carAt: { x: L('hospital').x + 66, y: L('hospital').y + 30 } },
+        { kind: 'deliver', at: L('chapel'), label: 'Bring the coupe to St. Lucia Chapel', needsMissionCar: true },
       ],
     },
     {
@@ -62,6 +85,17 @@ export function storyMissions(city) {
       ],
     },
     {
+      id: 'mercy-run',
+      title: 'Mercy Run',
+      giver: 'Lucia',
+      intro: 'A surgeon at Mercy General has a cooler that cannot wait for paperwork. Get it to the marina before it warms up.',
+      payout: 1200,
+      steps: [
+        { kind: 'pickup', at: L('hospital'), label: 'Collect the cooler at Mercy General Hospital', heatOnDone: 'missionPickup' },
+        { kind: 'deliver', at: L('marina'), label: 'Get it to the Marina & Yacht Club' },
+      ],
+    },
+    {
       id: 'the-vice-run',
       title: 'The Vice Run',
       giver: 'Rico & Lucia',
@@ -70,7 +104,7 @@ export function storyMissions(city) {
       steps: [
         { kind: 'pickup', at: L('casino'), label: 'Take the bag at the Gilded Palm Casino', heatOnDone: 'missionPickup' },
         { kind: 'pickup', at: L('tower'), label: 'Take the bag at Vista Tower', heatOnDone: 'missionPickup' },
-        { kind: 'pickup', at: L('mall'), label: 'Take the bag at Coral Mall', heatOnDone: 'missionPickup' },
+        { kind: 'pickup', at: L('mall'), label: 'Take the bag at Coral Mall', heatOnDone: 'missionPickup', forceStars: 3 },
         { kind: 'deliver', at: L('lighthouse'), label: 'Vanish to Lighthouse Point' },
       ],
     },
@@ -163,7 +197,8 @@ export function currentObjective(g) {
 
 function stepLabel(g, step) {
   if (step.kind === 'rough') {
-    const left = g.mission.targets.filter((t) => t.state !== 'dead').length;
+    // A debtor counts once he is down: dead, or beaten to his knees and staying there.
+    const left = g.mission.targets.filter((t) => t.state !== 'dead' && t.state !== 'roughed').length;
     const total = step.count;
     return 'Rough up the debtors (' + (total - left) + '/' + total + ')';
   }
@@ -179,6 +214,19 @@ export function updateMissions(g, dt) {
     startStoryMission(g, g.storyIndex);
   }
 
+  // A wrecked marked coupe is not the end of the job: the giver leaves a fresh one
+  // where the first was parked, and the job rewinds to the steal.
+  if (g.mission && g.mission.car && g.mission.car.wrecked && p.car !== g.mission.car) {
+    const stealIndex = g.mission.def.steps.findIndex((s) => s.kind === 'steal');
+    if (stealIndex >= 0 && g.mission.stepIndex >= stealIndex) {
+      g.cars.splice(g.cars.indexOf(g.mission.car), 1);
+      g.mission.car = null;
+      g.mission.stepIndex = stealIndex;
+      activateStep(g, g.mission.def.steps[stealIndex]);
+      g.showBanner('The marked car is scrap', 'A fresh coupe waits where the first one was parked.', 3.6);
+    }
+  }
+
   const step = currentStep(g);
   if (step) {
     const d = dist(p.x, p.y, step.at.x, step.at.y);
@@ -192,7 +240,7 @@ export function updateMissions(g, dt) {
       if (g.mission.car && p.car === g.mission.car) finishStep(g, step);
       else if (d < 90) g.promptText = 'The pink coupe. Take it.';
     } else if (step.kind === 'rough') {
-      const left = g.mission.targets.filter((t) => t.state !== 'dead').length;
+      const left = g.mission.targets.filter((t) => t.state !== 'dead' && t.state !== 'roughed').length;
       if (left === 0) finishStep(g, step);
     }
   }
@@ -230,7 +278,7 @@ function updateErrand(g, dt) {
     if (dist(p.x, p.y, e.from.x, e.from.y) < 46) {
       const d = dist(e.from.x, e.from.y, e.to.x, e.to.y);
       e.state = 'deliver';
-      e.timeLeft = Math.round(d / 9.5) + 30;
+      e.timeLeft = Math.round(d / 14) + 18;
       e.payout = Math.round(d / 11) + 45;
       g.sound.pickup();
       g.showBanner('Errand picked up', 'Get it to ' + e.toName + ' — $' + e.payout + ' on the dash.', 3);
