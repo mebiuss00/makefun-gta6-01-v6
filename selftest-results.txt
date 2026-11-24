@@ -1,0 +1,26 @@
+Palmera Heat: Vice Run — headless self-test
+Run: the game served by `node serve.ts`, opened in headless Chromium at
+http://localhost:8901/index.html?test=1 — the game's own test mode plays it
+(walks, steals a car, drives, commits a crime, finishes story job 1, saves)
+and writes these lines into the page. 2026-11-20.
+
+PASS world: at least 60 buildings — 105 buildings
+PASS world: at least 12 named landmarks — 15 landmarks
+PASS world: parking spots laid out — 30 spots
+PASS player: spawned on foot — at 1750,2382
+PASS player: walks with D held — moved 168px
+PASS cars: a parked car exists to steal
+PASS cars: player got in
+PASS cars: the car accelerates and travels — speed 272, moved 366px
+PASS cars: player got back out
+PASS wanted: heat becomes 3+ stars — heat 60, stars 3
+PASS police: cruisers respond — 3 on scene
+PASS mission: job 1 starts
+PASS mission: goto step completes — step 1
+PASS mission: the marked car exists
+PASS mission: stealing it advances the job — step 2
+PASS mission: delivery finishes the job
+PASS mission: the payout landed — money 40 -> 340
+PASS save: localStorage round-trip
+PASS wanted: heat decays unseen — heat 7.9 -> 2.8
+RESULT: 19/19 passed
